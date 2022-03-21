@@ -3,9 +3,9 @@
 	
 
 	lives:			.byte 3
-	frogLocation:		.byte 14, 7
-	carsLocations:		.byte 0, 4, 0, 4
-	logsLocations:		.byte 0, 4, 0, 4
+	frogLocation:		.half 14, 28
+	carsLocations:		.half 0, 14, 0, 14
+	logsLocations:		.half 0, 14, 0, 14
 	
 	grassColor: 		.word 0x0000ff00
 	waterColor: 		.word 0x000000ff
@@ -14,7 +14,7 @@
 	frogColor:		.word 0x00663399
 	
 	
-	sizeDisplay:		.half 128
+	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	sizeFrog:		.byte 4
 	# Relative to the size of the frog
 	sizeGoal:		.byte 2
@@ -25,7 +25,6 @@
 
 .text
 main:
-# TODO: Fix the pixels at the x-coordinates
 # TODO: Create a draw at location function to simplify all of this
 drawScene:
 	lw $t0, displayAddress # $t0 holds the displayAddress
@@ -60,6 +59,7 @@ drawSceneWaterRegionInit:
 	mult $t9, $t8
 	mflo $t9
 	add $t9, $t9, $t7
+	
 	
 drawSceneWaterRegion:
 	lw $t2, waterColor
@@ -140,23 +140,23 @@ drawSceneStartRegion:
 drawObjectsStart:
 drawFrog:
 	la $t0, frogLocation  # $t0 is the address of frogLocation
-	lb $t1, 0($t0)  # $t1 is the x-coordinate in terms of frog sizes
-	lb $t2, 1($t0)  # $t2 is the y-coordinate in terms of frog sizes
+	lh $t1, 0($t0)  # $t1 is the x-coordinate
+	lh $t2, 2($t0)  # $t2 is the y-coordinate
 	
-	lb $t3, sizeFrog
+	addi $t3, $zero, 4
 	mult $t1, $t3
-	mflo $t1  # $t1 is the x-coordinate in terms of pixels 
-	mult $t2, $t3
-	mflo $t2  # $t2 is the y-coordinate in terms of pixels
+	mflo $t1
+	# $t1 and $t2 now represent the bit offset
 	
-	lw $t0, displayAddress  # $t0 holds the display address
+	lw $t0, displayAddress  # $t0 now holds the display address
 	lw $t4, frogColor       # $t4 holds the color of the frog
 	
 	lh $t5, sizeDisplay  # $t5 is the size of the display
 	mult $t5, $t2
 	mflo $t6
 	add $t6, $t0, $t6
-	add $t6, $t6, $t1    # $t6 holds the top left pixel of the frog
+	add $t6, $t6, $t1
+	# $t6 holds the top left pixel of the frog
 	
 	
 	sw $t4, 0($t6)
