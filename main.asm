@@ -49,7 +49,7 @@
 	carSpeeds:		.byte 1, 1, 1, 1
 	logLocations:		.byte 8, 24, 4, 20
 	logSizes:		.byte 2, 2, 2, 2
-	logSpeeds:		.byte 1, 1, 1, 1
+	logSpeeds:		.byte -1, -1, -1, -1
 	numCarsTotal:		.byte 4
 	numLogsTotal:		.byte 4
 	numCarsPerRow:		.byte 2
