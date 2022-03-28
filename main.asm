@@ -18,8 +18,10 @@
 # Which approved additional features have been implemented?
 # 1. Change the direction the frog is pointing
 # 2. Have the cars and logs move at different speeds
-# 2. Add a third row in each of the water and road sections.
-# 3. 
+# 3. Display the number of lives remaining.
+# 4. Randomize the size of the logs and cars in the scene.
+# 5. Add a third row in each of the water and road sections.
+# 6. 
 #
 # Any additional information that the TA needs to know:
 # - (write here, if any)
@@ -45,12 +47,17 @@
 	frogDirection:		.byte 0  # Stores the direction the frog is pointing at
 					 # 0 is forward, 1 is left, 2 is down, 3 is right
 
+	randomizeSizes:		.byte 1  # Randomize the size of the cars and logs if non-zero
 	carLocations:		.byte 28, 12, 0, 16
 	carSizes:		.byte 2, 2, 2, 2
 	carSpeeds:		.byte 1, 1, 2, 2  # Speeds must be positive
+	carWait:		.word 8  # The number of iterations to wait until movement
+	currentCarWait:		.word 0
 	logLocations:		.byte 8, 24, 4, 20
 	logSizes:		.byte 2, 2, 2, 2
 	logSpeeds:		.byte -1, -1, -2, -2  # Speeds can be positive or negative
+	logWait:		.word 8  # The number of iterations to wait until movement
+	currentLogWait:		.word 0
 	numCarsTotal:		.byte 4
 	numLogsTotal:		.byte 4
 	numCarsPerRow:		.byte 2
@@ -64,6 +71,7 @@
 	frogColor:		.word 0x00663399
 	carColor:		.word 0x00ff0000
 	logColor:		.word 0x00b5651d
+	lifeColor:		.word 0x00ff0000
 	
 	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	pixelsInDisplay:	.byte 32   # Num pixels for every row in the display
@@ -71,8 +79,8 @@
 	sizeFrog:		.byte 4    # In number of pixels
 					   # IMPORTANT: If this is changed, the frog sprite must be updated accordingly
 	
-	displayBufferSize:	.half  4096  # The space in the display buffer
-	displayBuffer:		.space 4096  # The buffer for the display to stop the screen from blinking
+	displayBufferSize:	.half  4100  # The space in the display buffer
+	displayBuffer:		.space 4100  # The buffer for the display to stop the screen from blinking
 					     # Set the display buffer to be pixelsInDisplay * pixelsInDisplayDown * 4
 	
 	# Everything here is in number of sizeFrogs
@@ -84,12 +92,49 @@
 	sizeStart:		.byte 1
 
 .text
-start:
+startSetup:
+	lb $t0, randomizeSizes
+	beqz $t0, endSetupLogLengths
+setupRandomCarLengths:
+	la $t0, carSizes  # $t0 is the address of the carSizes
+	lb $t1, numCarsTotal  # $t1 is the number of cars left to generate
+setupRandomCarLengthsLoop:
+	addi $t1, $t1, -1
+	
+	add $t2, $t1, $t0
+	li $v0, 42
+	li $a0, 0
+	li $a1, 3
+	syscall
+	addi $a0, $a0, 1
+	sb $a0, ($t2)
+	
+	beqz $t1, endSetupCarLengths
+	j setupRandomCarLengthsLoop
+endSetupCarLengths:
+setupRandomLogLengths:
+	la $t0, logSizes  # $t0 is the address of the carSizes
+	lb $t1, numLogsTotal  # $t1 is the number of cars left to generate
+setupRandomLogLengthsLoop:
+	addi $t1, $t1, -1
+	
+	add $t2, $t1, $t0
+	li $v0, 42
+	li $a0, 0
+	li $a1, 3
+	syscall
+	addi $a0, $a0, 1
+	sb $a0, ($t2)
+	
+	beqz $t1, endSetupLogLengths
+	j setupRandomLogLengthsLoop
+endSetupLogLengths:
+endSetup:
 	j main
 
 # Draws a rectangle at coordinates (x, y) = ($a0, $a1) of width $a2 in frog sizes and height 1 frog size
 # with the color in $a3
-drawRectangle:
+drawRectangleFunction:
 	# $a3 holds the color of the rectangle
 	
 	lb $s0, sizeFrog
@@ -118,7 +163,7 @@ drawRectangle:
 	
 	
 drawRectangleLoop:
-	beqz $s2, FunctionEnd
+	beqz $s2, drawRectangleFunctionEnd
 	addi $s2, $s2, -1
 	
 	add $s3, $zero, $a2
@@ -142,7 +187,6 @@ fixOverflow:
 	add $s5, $s5, $s7
 
 endFixOverflow:
-	
 	j drawRectangleRow
 
 drawRectangleRowEnd:
@@ -150,9 +194,35 @@ drawRectangleRowEnd:
 	add $s6, $s6, $s7  # Move $s6 down
 
 	j drawRectangleLoop
-
-FunctionEnd:
+drawRectangleFunctionEnd:
 	jr $ra
+
+loseLifeFunction:
+	# Lose a life, and end the game if lives are negative
+	lb $t0, lives
+	beqz $t0, dieFunction
+	addi $t0, $t0, -1
+	
+	la $t1, lives
+	sb $t0, ($t1)
+endLoseLifeFunction:
+
+dieFunction:
+	# Handle dying: Reset player position, lives, and goals filled
+	
+	# TODO
+dieFunctionEnd:
+
+checkCollisionFunction:
+	# Check if the current location of the frog collides with the rectangle
+	# specified in the input.
+	
+	# The rectangle in the input is specified by (x, y) = ($a0, $a1) as the top left corner
+	# $a2 as the width, and $a3 as the height.
+	# $v0 is set to zero on no collision, and a non-zero value on collision.
+	
+	# TODO
+endCheckCollisionFunction:
 
 main:
 moveFrog:
@@ -185,8 +255,10 @@ handleUp:
 	addi $t5, $zero, 0
 	sb $t5, ($t4)  # Load the direction
 	
+	addi $t3, $zero, 1
+	
 	addi $t2, $t2, -1
-	bgez $t2, handleUpEnd
+	bge $t2, $t3, handleUpEnd
 	addi $t2, $t2, 1
 handleUpEnd:
 	sh $t2, 2($t0)
@@ -220,11 +292,14 @@ handleDownEnd:
 	j endMoveFrog
 endMoveFrog:
 
-startDrawScore:
-	# Draw a heart for each life on the top left of the screen
-endDrawScore:
-
 moveCars:
+	la $t0, currentCarWait
+	lw $t1, currentCarWait
+	
+	lw $t2, carWait
+	bne $t2, $t1, handleEqualCars
+	sb $zero, ($t0)
+
 	lb $t0, numCarsTotal  # $t0 holds the number of cars left to draw
 	la $t9, carLocations  # $t9 holds the address of carLocations
 	la $t8, carSpeeds  # $t8 holds the address of the carSpeeds
@@ -245,9 +320,20 @@ moveCarsLoop:
 	sb $t2, ($t7)
 
 	j moveCarsLoop
+handleEqualCars:
+	addi $t1, $t1, 1
+	sw $t1, ($t0)
+
 moveCarsEnd:
 
 moveLogs:
+	la $t0, currentLogWait
+	lw $t1, currentLogWait
+	
+	lw $t2, logWait
+	bne $t2, $t1, handleEqualLogs
+	sb $zero, ($t0)
+
 	lb $t0, numLogsTotal  # $t0 holds the number of logs left to draw
 	la $t9, logLocations  # $t9 holds the address of logLocations
 	la $t8, logSpeeds  # $t8 holds the address of the logSpeeds
@@ -272,6 +358,10 @@ EndHandleNegativeLogs:
 	sb $t2, ($t7)
 
 	j moveLogsLoop
+handleEqualLogs:
+	addi $t1, $t1, 1
+	sw $t1, ($t0)
+
 moveLogsEnd:
 
 
@@ -441,7 +531,7 @@ drawCarsRow:  # Draw a row of cars
 	
 	add $a3, $zero, $t5  # $a3 is the color
 	
-	jal drawRectangle
+	jal drawRectangleFunction
 	
 	addi $t2, $t2, 1  # Move to the next car location
 	addi $t3, $t3, 1  # Move to the next car size
@@ -481,7 +571,7 @@ drawLogsRow:  # Draw a row of logs
 	
 	add $a3, $zero, $t5  # $a3 is the color
 	
-	jal drawRectangle
+	jal drawRectangleFunction
 	
 	addi $t2, $t2, 1  # Move to the next log location
 	addi $t3, $t3, 1  # Move to the next log size
@@ -619,6 +709,41 @@ drawFrogLeft:
 	sw $t4, 12($t6)
 drawFrogEnd:
 
+startDrawLives:
+	# Draw a heart for each life on the top left of the screen
+	la $t0, displayBuffer  # $t0 holds the displayBuffer
+	lb $t1, lives  # $t1 holds the number of hearts to draw
+	
+	add $t2, $zero, $zero  # $t2 is the current offset
+	addi $t3, $zero, 16  # $t3 holds the offset to add in number of bytes per life
+	
+	lh $t4, sizeDisplay  # $t4 holds the display size in bytes
+	lw $t5, lifeColor  # $t5 holds the color to draw
+
+drawLivesLoop:
+	beqz $t1, endDrawLives
+	
+	addi $t9, $t2, 0
+	sw $t5, displayBuffer($t9)
+	addi $t9, $t9, 4
+	addi $t9, $t9, 4
+	sw $t5, displayBuffer($t9)
+	add $t9, $t4, $t9
+	addi $t9, $t9, -8
+	sw $t5, displayBuffer($t9)
+	addi $t9, $t9, 4
+	sw $t5, displayBuffer($t9)
+	addi $t9, $t9, 4
+	sw $t5, displayBuffer($t9)
+	add $t9, $t4, $t9
+	addi $t9, $t9, -4
+	sw $t5, displayBuffer($t9)
+	
+	add $t2, $t2, $t3
+	addi $t1, $t1, -1
+	j drawLivesLoop
+endDrawLives:
+
 # Use the screen buffer to update the screen
 # Keep this code at the end
 startUpdateScreen:
@@ -630,14 +755,13 @@ startUpdateScreen:
 	mult $t9, $t2
 	mflo $t2  # $t2 holds the offset of the earliest undrawn pixel
 updateScreenLoop:
-	beqz $t2, endUpdateScreenLoop
-	
+	addi $t2, $t2, -4
 	add $t3, $t2, $t0  # $t3 holds the address of the location in the buffer being drawn
 	lw $t4, ($t3)  # $t4 holds the color to draw
 	add $t3, $t2, $t1   # $t3 holds the location in memory to draw in
 	sw $t4, ($t3)  # Draw onto the screen
 	
-	addi $t2, $t2, -4
+	beqz $t2, endUpdateScreenLoop
 	j updateScreenLoop
 endUpdateScreenLoop:
 
@@ -645,12 +769,12 @@ endUpdateScreen:
 
 sleep:
 	li $v0, 32
-	li $a0, 100
+	li $a0, 10
 	syscall
 
 restartGameLoop:
 	j main
 
 Exit:
-	li $v0, 10
+	li $v0, 20
 	syscall
