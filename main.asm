@@ -13,10 +13,11 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 1
+# - Milestone 2
 #
 # Which approved additional features have been implemented?
 # 1. Change the direction the frog is pointing
+# 2. Have the cars and logs move at different speeds
 # 2. Add a third row in each of the water and road sections.
 # 3. 
 #
@@ -46,15 +47,16 @@
 
 	carLocations:		.byte 28, 12, 0, 16
 	carSizes:		.byte 2, 2, 2, 2
-	carSpeeds:		.byte 1, 1, 1, 1
+	carSpeeds:		.byte 1, 1, 2, 2  # Speeds must be positive
 	logLocations:		.byte 8, 24, 4, 20
 	logSizes:		.byte 2, 2, 2, 2
-	logSpeeds:		.byte -1, -1, -1, -1
+	logSpeeds:		.byte -1, -1, -2, -2  # Speeds can be positive or negative
 	numCarsTotal:		.byte 4
 	numLogsTotal:		.byte 4
 	numCarsPerRow:		.byte 2
 	numLogsPerRow:		.byte 2
 	
+	scoreColor:		.word 0x00000000
 	grassColor: 		.word 0x0000ff00
 	waterColor: 		.word 0x000000ff
 	safeColor:		.word 0x00ffff00
@@ -65,11 +67,17 @@
 	
 	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	pixelsInDisplay:	.byte 32   # Num pixels for every row in the display
+	pixelsInDisplayDown:	.byte 32   # Num pixels down the display
 	sizeFrog:		.byte 4    # In number of pixels
 					   # IMPORTANT: If this is changed, the frog sprite must be updated accordingly
 	
+	displayBufferSize:	.half  4096  # The space in the display buffer
+	displayBuffer:		.space 4096  # The buffer for the display to stop the screen from blinking
+					     # Set the display buffer to be pixelsInDisplay * pixelsInDisplayDown * 4
+	
 	# Everything here is in number of sizeFrogs
-	sizeGoal:		.byte 2
+	sizeScore:		.byte 1
+	sizeGoal:		.byte 1
 	sizeWater:		.byte 2
 	sizeSafe:		.byte 1
 	sizeRoad:		.byte 2
@@ -88,7 +96,7 @@ drawRectangle:
 	mult $a2, $s0
 	mflo $a2
 	
-	lw $s1, displayAddress
+	la $s1, displayBuffer
 	add $s6, $s1, $zero
 	addi $s2, $zero, 4
 	mult $a0, $s2
@@ -144,21 +152,12 @@ drawRectangleRowEnd:
 	j drawRectangleLoop
 
 FunctionEnd:
-	add $s0, $zero, $zero
-	add $s1, $zero, $zero
-	add $s2, $zero, $zero
-	add $s3, $zero, $zero
-	add $s4, $zero, $zero
-	add $s5, $zero, $zero
-	add $s6, $zero, $zero
-	add $s7, $zero, $zero
 	jr $ra
 
 main:
-# TODO: Simplify this with the drawRectangle function
 moveFrog:
 	lw $t8, 0xffff0000
-	bne $t8, 1, drawScene
+	bne $t8, 1, endMoveFrog
 
 	lw $t3, 0xffff0004  # $t3 contains the ascii value of the key pressed
 	la $t0, frogLocation  # $t0 points to the location of the frog
@@ -171,7 +170,7 @@ moveFrog:
 	beq $t3, 0x77, handleUp
 	beq $t3, 0x64, handleRight
 	beq $t3, 0x73, handleDown
-	j drawScene
+	j moveFrog
 handleLeft:
 	addi $t5, $zero, 3
 	sb $t5, ($t4)  # Load the direction
@@ -181,7 +180,7 @@ handleLeft:
 	addi $t1, $t1, 4
 handleLeftEnd:
 	sh $t1, ($t0)
-	j drawScene
+	j endMoveFrog
 handleUp:
 	addi $t5, $zero, 0
 	sb $t5, ($t4)  # Load the direction
@@ -192,7 +191,7 @@ handleUp:
 handleUpEnd:
 	sh $t2, 2($t0)
 	
-	j drawScene
+	j endMoveFrog
 handleRight:
 	addi $t5, $zero, 1
 	sb $t5, ($t4)  # Load the direction
@@ -204,7 +203,7 @@ handleRight:
 handleRightEnd:
 	sh $t1, ($t0)
 	
-	j drawScene	
+	j endMoveFrog
 handleDown:
 	addi $t5, $zero, 2
 	sb $t5, ($t4)  # Load the direction
@@ -218,14 +217,87 @@ handleDown:
 handleDownEnd:
 	sh $t2, 2($t0)
 	
-	j drawScene
+	j endMoveFrog
+endMoveFrog:
+
+startDrawScore:
+	# Draw a heart for each life on the top left of the screen
+endDrawScore:
+
+moveCars:
+	lb $t0, numCarsTotal  # $t0 holds the number of cars left to draw
+	la $t9, carLocations  # $t9 holds the address of carLocations
+	la $t8, carSpeeds  # $t8 holds the address of the carSpeeds
+moveCarsLoop:
+	beqz $t0, moveCarsEnd
+	addi $t0, $t0, -1
 	
+	add $t7, $t0, $t8
+	lb $t1, ($t7)  # $t1 holds the speed of the car
+	add $t7, $t0, $t9
+	lb $t2, ($t7)  # $t2 holds the location of the car
+	add $t2, $t2, $t1
+	
+	lb $t6, pixelsInDisplay
+	div $t2, $t6
+	mfhi $t2
+	
+	sb $t2, ($t7)
+
+	j moveCarsLoop
+moveCarsEnd:
+
+moveLogs:
+	lb $t0, numLogsTotal  # $t0 holds the number of logs left to draw
+	la $t9, logLocations  # $t9 holds the address of logLocations
+	la $t8, logSpeeds  # $t8 holds the address of the logSpeeds
+moveLogsLoop:
+	beqz $t0, moveLogsEnd
+	addi $t0, $t0, -1
+	
+	add $t7, $t0, $t8
+	lb $t1, ($t7)  # $t1 holds the speed of the log
+	add $t7, $t0, $t9
+	lb $t2, ($t7)  # $t2 holds the location of the log
+	add $t2, $t2, $t1
+	
+	lb $t6, pixelsInDisplay
+	bgez $t2, EndHandleNegativeLogs
+StartHandleNegativeLogs:
+	add $t2, $t6, $t2
+EndHandleNegativeLogs:
+	div $t2, $t6
+	mfhi $t2
+	
+	sb $t2, ($t7)
+
+	j moveLogsLoop
+moveLogsEnd:
+
+
 drawScene:
-	lw $t0, displayAddress # $t0 holds the displayAddress
-	add $t1, $zero, $zero  # $t1 holds the current offset of the screen to draw on
-	lw $t2, grassColor     # $t2 holds the color to draw
+	la $t0, displayBuffer  # $t0 holds the address of the buffer
+	add $t1, $zero, $zero   # $t1 holds the current offset of the screen to draw on
+drawSceneScoreRegionInit:
+	lh $t9, sizeDisplay
+	lb $t8, sizeFrog
+	mult $t9, $t8
+	mflo $t9
+	lb $t8, sizeScore
+	mult $t9, $t8
+	mflo $t9
 	
+	lw $t2, scoreColor      # $t2 holds the color to draw
+drawSceneScoreRegion:
+	beq $t1, $t9, drawSceneGoalRegionInit
+	
+	add $t3, $t0, $t1  # $t3 holds the address + offset: the pixel to draw
+	sw $t2, 0($t3)
+	addi $t1, $t1, 4
+	
+	j drawSceneScoreRegion
 drawSceneGoalRegionInit:
+	add $t7, $t9, $zero
 	lh $t9, sizeDisplay
 	lb $t8, sizeFrog
 	mult $t9, $t8
@@ -233,6 +305,10 @@ drawSceneGoalRegionInit:
 	lb $t8, sizeGoal
 	mult $t9, $t8
 	mflo $t9
+	
+	add $t9, $t9, $t7
+	
+	lw $t2, grassColor      # $t2 holds the color to draw
 
 drawSceneGoalRegion:
 	beq $t1, $t9, drawSceneWaterRegionInit
@@ -254,9 +330,8 @@ drawSceneWaterRegionInit:
 	mflo $t9
 	add $t9, $t9, $t7
 	
-	
-drawSceneWaterRegion:
 	lw $t2, waterColor
+drawSceneWaterRegion:
 	beq $t1, $t9, drawSceneSafeRegionInit
 
 	add $t3, $t0, $t1  # $t3 holds the address + offset: the pixel to draw
@@ -275,9 +350,9 @@ drawSceneSafeRegionInit:
 	mult $t9, $t8
 	mflo $t9
 	add $t9, $t9, $t7
-	
+
 	lw $t2, safeColor
-	
+
 drawSceneSafeRegion:
 	beq $t1, $t9, drawSceneRoadRegionInit
 
@@ -330,7 +405,7 @@ drawSceneStartRegion:
 	addi $t1, $t1, 4
 
 	j drawSceneStartRegion
-	
+
 drawObjectsStart:
 drawCarsInit:
 	lb $t0, numCarsTotal   # $t0 holds the number of cars left to draw
@@ -338,15 +413,15 @@ drawCarsInit:
 	la $t2, carLocations   # $t2 holds the address of the location of the cars
 	la $t3, carSizes       # $t3 holds the address of the size of the cars
 
-	lb $t5, sizeGoal
+	lb $t5, sizeScore
 	add $t4, $zero, $t5
+	lb $t5, sizeGoal
+	add $t4, $t4, $t5
 	lb $t5, sizeWater
 	add $t4, $t4, $t5
 	lb $t5, sizeSafe
-	add $t4, $t4, $t5  # t4 holds the y coordinate of the top of the road
-	
+	add $t4, $t4, $t5  # t4 holds the y coordinate of the top of the road	
 	lw $t5, carColor  # $t5 holds the color of the car
-	
 	lb $t9, sizeRoad  # $t9 holds the size of the road
 	
 drawCars:
@@ -380,8 +455,10 @@ drawLogsInit:
 	la $t2, logLocations   # $t2 holds the address of the location of the logs
 	la $t3, logSizes       # $t3 holds the address of the size of the logs
 
+	lb $t5, sizeScore
+	add $t4, $zero, $t5
 	lb $t5, sizeGoal
-	add $t4, $zero, $t5 # t4 holds the y coordinate of the top of the water
+	add $t4, $t4, $t5 # t4 holds the y coordinate of the top of the water
 	
 	lw $t5, logColor  # $t5 holds the color of the car
 	
@@ -424,7 +501,7 @@ drawFrog:
 	mflo $t2
 	# $t1 and $t2 now represent the bit offset
 	
-	lw $t0, displayAddress  # $t0 now holds the display address
+	la $t0, displayBuffer  # $t0 now holds the address of the buffer
 	lw $t4, frogColor       # $t4 holds the color of the frog
 	
 	lh $t5, sizeDisplay  # $t5 is the size of the display
@@ -540,17 +617,39 @@ drawFrogLeft:
 	sw $t4, 0($t6)
 	sw $t4, 4($t6)
 	sw $t4, 12($t6)
-	
 drawFrogEnd:
+
+# Use the screen buffer to update the screen
+# Keep this code at the end
+startUpdateScreen:
+	la $t0, displayBuffer  # $t0 holds the address of the buffer 
+	lw $t1, displayAddress  # $t1 holds the location of the display
+	
+	addi $t2, $zero, 4  # $t2 holds the number 4, to multiply with below
+	lh $t9, displayBufferSize
+	mult $t9, $t2
+	mflo $t2  # $t2 holds the offset of the earliest undrawn pixel
+updateScreenLoop:
+	beqz $t2, endUpdateScreenLoop
+	
+	add $t3, $t2, $t0  # $t3 holds the address of the location in the buffer being drawn
+	lw $t4, ($t3)  # $t4 holds the color to draw
+	add $t3, $t2, $t1   # $t3 holds the location in memory to draw in
+	sw $t4, ($t3)  # Draw onto the screen
+	
+	addi $t2, $t2, -4
+	j updateScreenLoop
+endUpdateScreenLoop:
+
+endUpdateScreen:
 
 sleep:
 	li $v0, 32
-	li $a0, 30
+	li $a0, 100
 	syscall
 
 restartGameLoop:
 	j main
-	
 
 Exit:
 	li $v0, 10
