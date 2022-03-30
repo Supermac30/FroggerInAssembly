@@ -44,6 +44,7 @@
 	
 	lives:			.byte 3
 	frogLocation:		.half 12, 7
+	startingFrogLocation:	.half 12, 7
 	frogDirection:		.byte 0  # Stores the direction the frog is pointing at
 					 # 0 is forward, 1 is left, 2 is down, 3 is right
 
@@ -51,12 +52,12 @@
 	carLocations:		.byte 28, 12, 0, 16
 	carSizes:		.byte 2, 2, 2, 2
 	carSpeeds:		.byte 1, 1, 2, 2  # Speeds must be positive
-	carWait:		.word 8  # The number of iterations to wait until movement
+	carWait:		.word 5  # The number of iterations to wait until movement
 	currentCarWait:		.word 0
 	logLocations:		.byte 8, 24, 4, 20
 	logSizes:		.byte 2, 2, 2, 2
 	logSpeeds:		.byte -1, -1, -2, -2  # Speeds can be positive or negative
-	logWait:		.word 8  # The number of iterations to wait until movement
+	logWait:		.word 5  # The number of iterations to wait until movement
 	currentLogWait:		.word 0
 	numCarsTotal:		.byte 4
 	numLogsTotal:		.byte 4
@@ -90,7 +91,6 @@
 	sizeSafe:		.byte 1
 	sizeRoad:		.byte 2
 	sizeStart:		.byte 1
-
 .text
 startSetup:
 	lb $t0, randomizeSizes
@@ -199,17 +199,27 @@ drawRectangleFunctionEnd:
 
 loseLifeFunction:
 	# Lose a life, and end the game if lives are negative
-	lb $t0, lives
-	beqz $t0, dieFunction
-	addi $t0, $t0, -1
+	la $s0, frogLocation  # $t0 points to the location of the frog
+	la $s1, startingFrogLocation  # $t1 points to the original location of the frog
+	# Reset the location
+	lh $s2, ($s1)
+	sh $s2, ($s0)
+	lh $s2, 2($s1)
+	sh $s2, 2($s0)
 	
-	la $t1, lives
-	sb $t0, ($t1)
+	lb $s0, lives
+	beqz $s0, dieFunction
+	addi $s0, $s0, -1
+	
+	la $s1, lives
+	sb $s0, ($s1)
+	
+	jr $ra
 endLoseLifeFunction:
 
 dieFunction:
-	# Handle dying: Reset player position, lives, and goals filled
-	
+	# Handle dying: Reset lives and goals filled
+	j Exit
 	# TODO
 dieFunctionEnd:
 
@@ -221,10 +231,179 @@ checkCollisionFunction:
 	# $a2 as the width, and $a3 as the height.
 	# $v0 is set to zero on no collision, and a non-zero value on collision.
 	
-	# TODO
+	add $s1, $zero, $zero
+	la $s2, frogLocation
+	lh $s0, ($s2)  # $s0 holds the x coordinate of the frog
+	lh $s1, 2($s2)  # $s1 holds the y coordinate of the frog
+	lb $s2, sizeFrog  # $s2 holds the frog width
+	
+	# The frog height is always 1 by definition
+	
+	add $s3, $a0, $a2
+	lb $s4, pixelsInDisplay
+	add $s4, $s4, $s0
+	bge $s0, $s3, checkCollisionOutOfBounds
+	add $s3, $s0, $s2
+	ble $s3, $a0, checkCollisionOutOfBounds
+	add $s3, $a1, $a3
+	bge $s1, $s3, checkCollisionOutOfBounds
+	addi $s3, $s1, 1
+	ble $s3, $a1, checkCollisionOutOfBounds
+		
+returnTrueCheckCollision:
+	li $v0, 1
+	jr $ra
+checkCollisionOutOfBounds:
+	add $s1, $zero, $zero
+	la $s2, frogLocation
+	lh $s0, ($s2)
+	lb $s7, pixelsInDisplay
+	add $s0, $s0, $s7  # $s0 holds the x coordinate of the frog shifted off screen
+	lh $s1, 2($s2)  # $s1 holds the y coordinate of the frog
+	lb $s2, sizeFrog  # $s2 holds the frog width
+	
+	# The frog height is always 1 by definition
+	
+	add $s3, $a0, $a2
+	bge $s0, $s3, returnFalseCheckCollision
+	add $s3, $s0, $s2
+	ble $s3, $a0, returnFalseCheckCollision
+	add $s3, $a1, $a3
+	bge $s1, $s3, returnFalseCheckCollision
+	addi $s3, $s1, 1
+	ble $s3, $a1, returnFalseCheckCollision
+returnTrueCheckCollisionTwo:
+	li $v0, 1
+	jr $ra
+returnFalseCheckCollision:
+	li $v0, 0
+	jr $ra
 endCheckCollisionFunction:
 
 main:
+checkCollisionCars:
+	lb $t0, numCarsTotal   # $t0 holds the number of cars left to draw
+	lb $t1, numCarsPerRow  # $t1 holds the number of cars to draw per row
+	la $t2, carLocations   # $t2 holds the address of the location of the cars
+	la $t3, carSizes       # $t3 holds the address of the size of the cars
+
+	lb $t5, sizeScore
+	add $t4, $zero, $t5
+	lb $t5, sizeGoal
+	add $t4, $t4, $t5
+	lb $t5, sizeWater
+	add $t4, $t4, $t5
+	lb $t5, sizeSafe
+	add $t4, $t4, $t5  # t4 holds the y coordinate of the top of the road	
+	lw $t5, carColor  # $t5 holds the color of the car
+	lb $t9, sizeRoad  # $t9 holds the size of the road
+	
+checkCarCollisionsLoop:
+	addi $t9, $t9, -1
+	beqz $t0, endCheckCollisionCars
+	lb $t1, numCarsPerRow
+	
+checkCarCollisionsInnerLoop:  # Check a row of cars
+	beqz $t1, checkCarCollisionsLoop
+	
+	lb $a0, ($t2) # $a0 holds the x coordinate
+	
+	add $a1, $zero, $t4
+	add $a1, $a1, $t9  # $a1 holds the y coordinate
+	
+	lb $a2, ($t3)
+	lb $t6, sizeFrog
+	mult $a2, $t6
+	mflo $a2  # $a2 holds the width
+	
+	li $a3, 1  # $a3 holds the height
+	
+	jal checkCollisionFunction
+	bnez $v0, carCollisionFound
+	j carCollisionFoundEnd
+carCollisionFound:
+	jal loseLifeFunction
+carCollisionFoundEnd:
+	addi $t2, $t2, 1  # Move to the next car location
+	addi $t3, $t3, 1  # Move to the next car size
+	addi $t0, $t0, -1
+	addi $t1, $t1, -1
+	j checkCarCollisionsInnerLoop
+endCheckCollisionCars:
+
+checkCollisionLogs:
+	lb $t0, numLogsTotal   # $t0 holds the number of logs left to draw
+	lb $t1, numLogsPerRow  # $t1 holds the number of logs to draw per row
+	la $t2, logLocations   # $t2 holds the address of the location of the logs
+	la $t3, logSizes       # $t3 holds the address of the size of the logs
+
+	lb $t5, sizeScore
+	add $t4, $zero, $t5
+	lb $t5, sizeGoal
+	add $t4, $t4, $t5  # t4 holds the y coordinate of the top of the water	
+	lw $t5, carColor  # $t5 holds the color of the log
+	lb $t9, sizeWater  # $t9 holds the size of the water
+	
+	la $t7, frogLocation
+	lb $t7, 2($t7)  # $t7 holds the y coordinate of the frog
+	
+	blt $t7, $t4, endCheckCollisionLogs  # Don't check for collisions if the frog is too high
+	add $t8, $t9, $t4
+	bge $t7, $t8, endCheckCollisionLogs  # Don't check for collisions if the frog is too low
+	
+	la $t8, logSpeeds  # $t8 points to the speed of the logs
+	
+checkLogCollisionsLoop:
+	addi $t9, $t9, -1
+	beqz $t0, checkCollisionLogsNoCollisionFound
+	lb $t1, numLogsPerRow
+
+checkLogCollisionsInnerLoop:  # Check a row of logs
+	beqz $t1, checkLogCollisionsLoop
+	
+	lb $a0, ($t2) # $a0 holds the x coordinate
+	
+	add $a1, $zero, $t4
+	add $a1, $a1, $t9  # $a1 holds the y coordinate
+	
+	lb $a2, ($t3)
+	lb $t6, sizeFrog
+	mult $a2, $t6
+	mflo $a2  # $a2 holds the width
+	
+	li $a3, 1  # $a3 holds the height
+	
+	jal checkCollisionFunction
+	bnez $v0, waterCollisionFound
+	j waterCollisionFoundEnd
+waterCollisionFound:
+	# Move the frog with the log when it is time to move
+	lb $t0, currentLogWait
+	lb $t1, logWait
+	bne $t0, $t1, endCheckCollisionLogs
+	  
+	la $t0, frogLocation  # $t0 points to the location of the frog
+	lb $t1, ($t0)  # $t1 holds the x coordinate of the frog
+	lb $t2, ($t8)  # $t2 holds the speed of the log the frog is on
+	add $t1, $t1, $t2
+	bgez $t1, endFixOverflowWaterCollision
+fixOverflowWaterCollision:
+	sub $t1, $t1, $t2
+endFixOverflowWaterCollision:
+	sb $t1, ($t0)  # Move the frog's location
+	j endCheckCollisionLogs
+waterCollisionFoundEnd:
+	addi $t2, $t2, 1  # Move to the next car location
+	addi $t3, $t3, 1  # Move to the next car size
+	addi $t0, $t0, -1
+	addi $t1, $t1, -1
+	addi $t8, $t8, 1
+	j checkLogCollisionsInnerLoop
+checkCollisionLogsNoCollisionFound:
+
+	jal loseLifeFunction
+endCheckCollisionLogs:
+
 moveFrog:
 	lw $t8, 0xffff0000
 	bne $t8, 1, endMoveFrog
