@@ -39,10 +39,14 @@
 # The y-coordinate is relative to the number of frogs
 # The x-coordinate is relative to the number of pixels
 
+# TODO: Build infrastructure for goals i.e. add necessary variables, draw goals
+# TODO: Add collision with goals, as well as a score that is updated
+
 .data
 	displayAddress:		.word 0x10008000
 	
 	lives:			.byte 3
+	score:			.word 0
 	frogLocation:		.half 12, 7
 	startingFrogLocation:	.half 12, 7
 	frogDirection:		.byte 0  # Stores the direction the frog is pointing at
@@ -64,6 +68,9 @@
 	numCarsPerRow:		.byte 2
 	numLogsPerRow:		.byte 2
 	
+	goals:			.byte 0, 0, 0, 0, 0, 0, 0, 0
+	numGoals:		.byte 8
+	
 	scoreColor:		.word 0x00000000
 	grassColor: 		.word 0x0000ff00
 	waterColor: 		.word 0x000000ff
@@ -73,6 +80,7 @@
 	carColor:		.word 0x00ff0000
 	logColor:		.word 0x00b5651d
 	lifeColor:		.word 0x00ff0000
+	goalColor:		.word 0x00ffffff
 	
 	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	pixelsInDisplay:	.byte 32   # Num pixels for every row in the display
@@ -86,7 +94,7 @@
 	
 	# Everything here is in number of sizeFrogs
 	sizeScore:		.byte 1
-	sizeGoal:		.byte 1
+	sizeGoal:		.byte 1  # Keep this as 1, or goals won't draw properly
 	sizeWater:		.byte 2
 	sizeSafe:		.byte 1
 	sizeRoad:		.byte 2
@@ -208,8 +216,8 @@ loseLifeFunction:
 	sh $s2, 2($s0)
 	
 	lb $s0, lives
-	beqz $s0, dieFunction
 	addi $s0, $s0, -1
+	beqz $s0, dieFunction
 	
 	la $s1, lives
 	sb $s0, ($s1)
@@ -281,6 +289,51 @@ returnFalseCheckCollision:
 endCheckCollisionFunction:
 
 main:
+startCheckCollisionGoals:
+	lb $t0, numGoals  # $t0 holds the number of goals to draw left
+	la $t1, goals  # $t1 holds the address of the goals
+startCheckCollisionGoalsLoop:
+	beqz $t0, endCheckCollisionGoals
+	addi $t0, $t0, -1
+
+	add $t9, $t1, $t0  # $t2 is the address of the goal to check
+	lb $t3, ($t9)  # $t3 holds whether the goal should be drawn
+	
+	lb $t2, sizeFrog
+	mult $t2, $t0
+	mflo $a0  # $a0 holds the x coordinate
+	
+	lb $a1, sizeScore  # $a1 holds the y coordinate
+	li $a2, 1  # $a2 holds the width of the rectangle
+	li $a3, 1  # $a2 holds the height of the rectangle
+	
+	jal checkCollisionFunction
+	beqz $v0, noCollisionFound
+collisionFound:
+	# Here colliding with a goal is handled
+	la $t0, frogLocation  # $t0 points to the location of the frog
+	la $t1, startingFrogLocation  # $t1 points to the original location of the frog
+	# Reset the location
+	lh $t2, ($t1)
+	sh $t2, ($t0)
+	lh $t2, 2($t1)
+	sh $t2, 2($t0)
+	
+	bnez $t3, collisionFoundGoalNonEmpty
+collisionFoundGoalEmpty:
+	# Load a 1 into the goal and increment the score
+	li $t2, 1
+	sb $t2, ($t9)
+	lw $t2, score
+	addi $t2, $t2, 100
+	sw $t2, score
+collisionFoundGoalNonEmpty:
+	
+	j endCheckCollisionGoals
+noCollisionFound:
+	j startCheckCollisionGoalsLoop
+endCheckCollisionGoals:
+
 checkCollisionCars:
 	lb $t0, numCarsTotal   # $t0 holds the number of cars left to draw
 	lb $t1, numCarsPerRow  # $t1 holds the number of cars to draw per row
@@ -502,7 +555,6 @@ moveCarsLoop:
 handleEqualCars:
 	addi $t1, $t1, 1
 	sw $t1, ($t0)
-
 moveCarsEnd:
 
 moveLogs:
@@ -540,9 +592,7 @@ EndHandleNegativeLogs:
 handleEqualLogs:
 	addi $t1, $t1, 1
 	sw $t1, ($t0)
-
 moveLogsEnd:
-
 
 drawScene:
 	la $t0, displayBuffer  # $t0 holds the address of the buffer
@@ -667,13 +717,37 @@ drawSceneStartRegionInit:
 	lw $t2, grassColor
 	
 drawSceneStartRegion:
-	beq $t1, $t9, drawObjectsStart
+	beq $t1, $t9, endDrawScenes
 
 	add $t3, $t0, $t1  # $t3 holds the address + offset: the pixel to draw
 	sw $t2, 0($t3)
 	addi $t1, $t1, 4
 
 	j drawSceneStartRegion
+endDrawScenes:
+
+drawGoals:
+	lb $t0, numGoals  # $t0 holds the number of goals to draw left
+	la $t1, goals  # $t1 holds the address of the goals
+drawGoalsLoop:
+	beqz $t0, endDrawGoals
+	addi $t0, $t0, -1
+
+	add $t2, $t1, $t0  # $t2 is the address of the goal to check
+	lb $t3, ($t2)  # $t3 holds whether the goal should be drawn
+	beqz $t3, drawGoalsLoop
+	
+	lb $t2, sizeFrog
+	mult $t2, $t0
+	mflo $a0  # $a0 holds the x coordinate
+	
+	lb $a1, sizeScore  # $a1 holds the y coordinate
+	li $a2, 1  # $a2 holds the width of the rectangle
+	lb $a3, goalColor  # $a2 holds the color
+	
+	jal drawRectangleFunction
+	j drawGoalsLoop
+endDrawGoals:
 
 drawObjectsStart:
 drawCarsInit:
