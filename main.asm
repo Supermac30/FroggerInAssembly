@@ -13,7 +13,7 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 2
+# - Milestone 4
 #
 # Which approved additional features have been implemented?
 # 1. Change the direction the frog is pointing
