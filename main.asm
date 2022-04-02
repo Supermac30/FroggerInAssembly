@@ -20,15 +20,15 @@
 # 2. Have the cars and logs move at different speeds
 # 3. Display the number of lives remaining.
 # 4. Randomize the size of the logs and cars in the scene.
-# 5. Add a third row in each of the water and road sections.
-# 6. 
+# 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
+# 6. Add a time limit to the game.
+# 7. Add a third row in each of the water and road sections.
+# 8. 
 #
 # Any additional information that the TA needs to know:
 # - (write here, if any)
 #
 ###################################################################
-
-# TODO: Add screen buffer
 
 # Frogger in MIPS
 #
@@ -81,6 +81,7 @@
 	logColor:		.word 0x00b5651d
 	lifeColor:		.word 0x00ff0000
 	goalColor:		.word 0x00ffffff
+	timeColor:		.word 0x00ffc0cb
 	
 	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	pixelsInDisplay:	.byte 32   # Num pixels for every row in the display
@@ -99,6 +100,11 @@
 	sizeSafe:		.byte 1
 	sizeRoad:		.byte 2
 	sizeStart:		.byte 1
+	
+	screen:			.byte 0  # Screen = 0 is the game, screen = 1 is the pause menu
+	time:			.word 32
+	timerSpeed:		.word 10
+	timeSoFar:		.word 0
 .text
 startSetup:
 	lb $t0, randomizeSizes
@@ -289,6 +295,44 @@ returnFalseCheckCollision:
 endCheckCollisionFunction:
 
 main:
+startPauseMenu:
+	lb $t0, screen  # $t0 is 1 if the game is paused
+	bne $t0, 1, endPauseMenu
+	
+	li $a0, 10
+	li $a1, 3
+	li $a2, 1
+	lw $a3, scoreColor
+	jal drawRectangleFunction
+	li $a0, 10
+	li $a1, 4
+	li $a2, 1
+	lw $a3, scoreColor
+	jal drawRectangleFunction
+	li $a0, 15
+	li $a1, 3
+	li $a2, 1
+	lw $a3, scoreColor
+	jal drawRectangleFunction
+	li $a0, 15
+	li $a1, 4
+	li $a2, 1
+	lw $a3, scoreColor
+	jal drawRectangleFunction
+	
+	lw $t8, 0xffff0000
+	bne $t8, 1, startUpdateScreen  # $t8 contains whether a key has been pressed
+
+	lw $t3, 0xffff0004  # $t3 contains the ascii value of the key pressed
+	beq $t3, 0x70, endPauseGame
+	j startUpdateScreen
+endPauseGame:
+	la $t0, screen
+	li $t1, 0
+	
+	sb $t1, ($t0)
+	j endPauseMenu
+endPauseMenu:
 startCheckCollisionGoals:
 	lb $t0, numGoals  # $t0 holds the number of goals to draw left
 	la $t1, goals  # $t1 holds the address of the goals
@@ -468,11 +512,17 @@ moveFrog:
 	lh $t2, 2($t0)  # $t2 holds the y coordinate of the frog
 	lb $t9, pixelsInDisplay
 	
+	beq $t3, 0x70, pauseGame
 	beq $t3, 0x61, handleLeft
 	beq $t3, 0x77, handleUp
 	beq $t3, 0x64, handleRight
 	beq $t3, 0x73, handleDown
 	j moveFrog
+pauseGame:
+	la $t5, screen
+	li $t6, 1
+	sb $t6, ($t5)
+	j endMoveFrog
 handleLeft:
 	addi $t5, $zero, 3
 	sb $t5, ($t4)  # Load the direction
@@ -725,6 +775,54 @@ drawSceneStartRegion:
 
 	j drawSceneStartRegion
 endDrawScenes:
+
+drawTimer:
+	la $t0, displayBuffer  # $t0 holds the display buffer address
+	lw $t1, time
+	li $t2, 4
+	mult $t2, $t1
+	mflo $t1   # $t1 holds the number of pixels across to draw
+	lw $t2, timeColor  # $t2 holds the color of the pixels
+	lh $t3, sizeDisplay  # $t3 holds the number of pixels to jump downwards
+	
+	move $t4, $t0  # $t4 holds the address of the beginning of the row to draw
+	li $t6, 4  # $t6 holds the number of rows to draw
+drawTimerOuterLoop:
+	beqz $t6, drawTimerOuterLoopEnd
+	li $t5, 0  # $t5 holds the current offset of the row to draw on
+drawTimerInnerLoop:
+	beq $t5, $t1, drawTimerInnerLoopEnd
+	
+	add $t7, $t4, $t5
+	sw $t2, ($t7)
+	
+	addi $t5, $t5, 4
+	j drawTimerInnerLoop
+drawTimerInnerLoopEnd:
+	add $t4, $t4, $t3
+	add $t6, $t6, -1
+	j drawTimerOuterLoop
+drawTimerOuterLoopEnd:
+drawTimerEnd:
+
+handleTimer:
+	lw $t0, timeSoFar
+	lw $t1, timerSpeed
+	
+	addi $t0, $t0, 1
+	la $t2, timeSoFar
+	sw $t0, ($t2)
+	bne $t0, $t1, handleTimerEnd
+	
+	sw $zero, ($t2)
+	la $t0, time
+	lw $t1, time
+	addi $t1, $t1, -1
+	sw $t1, ($t0)
+	
+	bnez $t1, handleTimerEnd
+	j Exit
+handleTimerEnd:
 
 drawGoals:
 	lb $t0, numGoals  # $t0 holds the number of goals to draw left
