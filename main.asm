@@ -13,7 +13,7 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 4
+# - Milestone 5
 #
 # Which approved additional features have been implemented?
 # Easy:
@@ -21,14 +21,14 @@
 # 2. Have the cars and logs move at different speeds
 # 3. Display the number of lives remaining.
 # 4. Randomize the size of the logs and cars in the scene.
-# 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
+# 5. Displaying a pause screen or image when the â€˜pâ€™ key is pressed, and returning to the game when â€˜pâ€™ is pressed again.
 # 6. Add a time limit to the game.
 # 7. Add sound effects for movement, losing lives, collisions, and reaching the goal.
 # 8. Dynamic increase in difficulty (speed, obstacles, etc.) as game progresses
 # 9. Add a third row in each of the water and road sections. (I added four of each to fill up the screen)
 #
 # Hard:
-# 10. Display the player’s score at the top of the screen.
+# 10. Display the playerâ€™s score at the top of the screen.
 #
 # Any additional information that the TA needs to know:
 # - The increase in difficulty is as folloes: when the number of goals is
