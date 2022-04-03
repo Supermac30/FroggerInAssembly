@@ -16,6 +16,7 @@
 # - Milestone 4
 #
 # Which approved additional features have been implemented?
+# Easy:
 # 1. Change the direction the frog is pointing
 # 2. Have the cars and logs move at different speeds
 # 3. Display the number of lives remaining.
@@ -23,20 +24,26 @@
 # 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
 # 6. Add a time limit to the game.
 # 7. Add sound effects for movement, losing lives, collisions, and reaching the goal.
-# 8. Add a third row in each of the water and road sections.
-# 9. 
+# 8. Dynamic increase in difficulty (speed, obstacles, etc.) as game progresses
+# 9. Add a third row in each of the water and road sections. (I added four of each to fill up the screen)
+#
+# Hard:
+# 10. Display the player’s score at the top of the screen.
 #
 # Any additional information that the TA needs to know:
-#  When the number of goals is
+# - The increase in difficulty is as folloes: when the number of goals is
 #	1: The number of cars doubles
-#     	2: The speed of all cars is set to 2
-#	3: The size of all cars increases by 1
+#     	2: The speed of all cars increase
+#	3: The speed of all logs increase
 #	4: The timer is reset, but now moves faster
 # 	5: The number of logs cut in half
-#	6: The speed of all logs is set to -1
-#	7: The size of all logs decreases by 1
+#	6: The size of all logs decreases by 1
+#	7: The size of all cars increases by 1
 #
 ###################################################################
+
+# TODO: Fix log movement so that the frog can move even if there is an overflow, just that the x coordinate is now zero
+# TODO: Have collisions decrease the score by 10
 
 # Frogger in MIPS
 #
@@ -52,28 +59,28 @@
 	
 	lives:			.byte 3
 	score:			.word 0
-	frogLocation:		.half 12, 7
-	startingFrogLocation:	.half 12, 7
+	frogLocation:		.half 12, 15
+	startingFrogLocation:	.half 12, 15
 	frogDirection:		.byte 0  # Stores the direction the frog is pointing at
 					 # 0 is forward, 1 is left, 2 is down, 3 is right
 
 	randomizeSizes:		.byte 1  # Randomize the size of the cars and logs if non-zero
-	carLocations:		.byte 28, 12, 0, 16
-	carSizes:		.byte 2, 2, 2, 2
-	carSpeeds:		.byte 1, 1, 2, 2  # Speeds must be positive
-	carWait:		.word 5  # The number of iterations to wait until movement
+	carLocations:		.byte 28, 12, 0, 16, 28, 12, 0, 16
+	carSizes:		.byte 2, 2, 2, 2, 2, 2, 2, 2
+	carSpeeds:		.byte 1, 1, 2, 2, 1, 1, 2, 2  # Speeds must be positive
+	carWait:		.word 10  # The number of iterations to wait until movement
 	currentCarWait:		.word 0
-	logLocations:		.byte 8, 24, 4, 20
-	logSizes:		.byte 2, 2, 2, 2
-	logSpeeds:		.byte -1, -1, -2, -2  # Speeds can be positive or negative
-	logWait:		.word 5  # The number of iterations to wait until movement
+	logLocations:		.byte 8, 24, 4, 20, 8, 24, 4, 20
+	logSizes:		.byte 2, 2, 2, 2, 2, 2, 2, 2
+	logSpeeds:		.byte -1, -1, -2, -2, -1, -1, -2, -2 # Speeds can be positive or negative
+	logWait:		.word 10  # The number of iterations to wait until movement
 	currentLogWait:		.word 0
-	numCarsTotal:		.byte 2
-	numLogsTotal:		.byte 4
+	numCarsTotal:		.byte 4
+	numLogsTotal:		.byte 8
 	numCarsPerRow:		.byte 1
 	numLogsPerRow:		.byte 2
 	
-	numGoals:		.byte 0  # Used to decide difficulty
+	numGoalsFilled:		.byte 0  # Used to decide difficulty
 	
 	goals:			.byte 0, 0, 0, 0, 0, 0, 0, 0
 	numGoals:		.byte 8
@@ -89,27 +96,28 @@
 	lifeColor:		.word 0x00ff0000
 	goalColor:		.word 0x00ffffff
 	timeColor:		.word 0x00ffc0cb
+	pauseColor:		.word 0x0004260c
 	
 	sizeDisplay:		.half 128  # Num bytes for every row in the display
 	pixelsInDisplay:	.byte 32   # Num pixels for every row in the display
-	pixelsInDisplayDown:	.byte 32   # Num pixels down the display
+	pixelsInDisplayDown:	.byte 64   # Num pixels down the display
 	sizeFrog:		.byte 4    # In number of pixels
 					   # IMPORTANT: If this is changed, the frog sprite must be updated accordingly
 	
-	displayBufferSize:	.half  4100  # The space in the display buffer
-	displayBuffer:		.space 4100  # The buffer for the display to stop the screen from blinking
+	displayBufferSize:	.word  3000  # The space in the display buffer
+	displayBuffer:		.space 10000  # The buffer for the display to stop the screen from blinking
 					     # Set the display buffer to be pixelsInDisplay * pixelsInDisplayDown * 4
 	
 	# Everything here is in number of sizeFrogs
-	sizeScore:		.byte 1
+	sizeScore:		.byte 3
 	sizeGoal:		.byte 1  # Keep this as 1, or goals won't draw properly, everything else can change
-	sizeWater:		.byte 2
-	sizeSafe:		.byte 1
-	sizeRoad:		.byte 2
-	sizeStart:		.byte 1
+	sizeWater:		.byte 4
+	sizeSafe:		.byte 2
+	sizeRoad:		.byte 4
+	sizeStart:		.byte 2
 	
 	screen:			.byte 0  # Screen = 0 is the game, screen = 1 is the pause menu
-	time:			.word 32
+	time:			.word 31
 	timerSpeed:		.word 50
 	timeSoFar:		.word 0
 	
@@ -136,7 +144,7 @@ setupRandomCarLengthsLoop:
 	add $t2, $t1, $t0
 	li $v0, 42
 	li $a0, 0
-	li $a1, 3
+	li $a1, 2
 	syscall
 	addi $a0, $a0, 1
 	sb $a0, ($t2)
@@ -153,9 +161,9 @@ setupRandomLogLengthsLoop:
 	add $t2, $t1, $t0
 	li $v0, 42
 	li $a0, 0
-	li $a1, 3
+	li $a1, 2
 	syscall
-	addi $a0, $a0, 1
+	addi $a0, $a0, 2
 	sb $a0, ($t2)
 	
 	beqz $t1, endSetupLogLengths
@@ -294,10 +302,7 @@ dieFunction:
 	lb $a3, gameOverThemeLength
 	jal playMidiFunction
 
-	li $s0, 2
-	sb $s0, screen
-
-	j main
+	j Exit
 dieFunctionEnd:
 
 checkCollisionFunction:
@@ -369,25 +374,25 @@ startPauseMenu:
 	lb $t0, screen  # $t0 is 1 if the game is paused
 	bne $t0, 1, endPauseMenu
 	
-	li $a0, 10
-	li $a1, 3
+	li $a0, 11
+	li $a1, 7
 	li $a2, 1
-	lw $a3, scoreColor
+	lw $a3, pauseColor
 	jal drawRectangleFunction
-	li $a0, 10
-	li $a1, 4
+	li $a0, 11
+	li $a1, 8
 	li $a2, 1
-	lw $a3, scoreColor
+	lw $a3, pauseColor
 	jal drawRectangleFunction
-	li $a0, 15
-	li $a1, 3
+	li $a0, 16
+	li $a1, 7
 	li $a2, 1
-	lw $a3, scoreColor
+	lw $a3, pauseColor
 	jal drawRectangleFunction
-	li $a0, 15
-	li $a1, 4
+	li $a0, 16
+	li $a1, 8
 	li $a2, 1
-	lw $a3, scoreColor
+	lw $a3, pauseColor
 	jal drawRectangleFunction
 	
 	lw $t8, 0xffff0000
@@ -448,10 +453,119 @@ collisionFoundGoalEmpty:
 	li $a2, 1
 	lb $a3, goalThemeLength
 	jal playMidiFunction
-endFroggerNoise:
+	
+	# Increment difficulty
+	lb $t0, numGoalsFilled
+	addi $t0, $t0, 1
+	sb $t0, numGoalsFilled
+	beq $t0, 1, handleNumGoals1
+	beq $t0, 2, handleNumGoals2
+	beq $t0, 3, handleNumGoals3
+	beq $t0, 4, handleNumGoals4
+	beq $t0, 5, handleNumGoals5
+	beq $t0, 6, handleNumGoals6
+	beq $t0, 7, handleNumGoals7
+	j endHandleNumGoals
+handleNumGoals1:
+	# Double the number of cars
+	li $t0, 2
+	lb $t1, numCarsTotal
+	mult $t1, $t0
+	mflo $t1
+	sb $t1, numCarsTotal
+
+	lb $t1, numCarsPerRow
+	mult $t1, $t0
+	mflo $t1
+	sb $t1, numCarsPerRow
+
+	j endHandleNumGoals
+handleNumGoals2:
+	# Increase the speed of cars
+	lb $t0, numCarsTotal
+handleNumGoals2Loop:
+	beqz $t0, handleNumGoals2LoopEnd
+	addi $t0, $t0, -1
+	
+	lb $t1, carSpeeds($t0)
+	addi $t1, $t1, 1
+	sb $t1, carSpeeds($t0)
+	
+	j handleNumGoals2Loop
+handleNumGoals2LoopEnd:
+	j endHandleNumGoals
+handleNumGoals3:
+	# Decrease the speed of the logs
+	lb $t0, numLogsTotal
+handleNumGoals3Loop:
+	beqz $t0, handleNumGoals3LoopEnd
+	addi $t0, $t0, -1
+	
+	lb $t1, logSpeeds($t0)
+	addi $t1, $t1, -1
+	sb $t1, logSpeeds($t0)
+	
+	j handleNumGoals3Loop
+handleNumGoals3LoopEnd:
+	j endHandleNumGoals
+handleNumGoals4:
+	# Reset and speed up the timer
+	li $t0, 31
+	sw $t0, time
+	
+	lw $t0, timerSpeed
+	div $t0, $t0, 2
+	sw $t0, timerSpeed
+	sw $zero, timeSoFar
+	
+	j endHandleNumGoals
+handleNumGoals5:
+	# Half the number of logs
+	lb $t1, numLogsTotal
+	div $t1, $t1, 2
+	sb $t1, numLogsTotal
+
+	lb $t1, numLogsPerRow
+	div $t1, $t1, 2
+	sb $t1, numLogsPerRow
+	
+	# Change maybe: The second log's speed is set to -3
+	li $t0, -5
+	li $t1, 1
+	sb $t0, logSpeeds($t1)
+
+	j endHandleNumGoals
+handleNumGoals6:
+	# Decrease the size of all logs
+	lb $t0, numLogsTotal
+handleNumGoals6Loop:
+	beqz $t0, handleNumGoals6LoopEnd
+	addi $t0, $t0, -1
+	
+	lb $t1, logSizes($t0)
+	addi $t1, $t1, -1
+	sb $t1, logSizes($t0)
+	
+	j handleNumGoals6Loop
+handleNumGoals6LoopEnd:
+	j endHandleNumGoals
+handleNumGoals7:
+	# Increase the size of all cars
+	lb $t0, numCarsTotal
+handleNumGoals7Loop:
+	beqz $t0, handleNumGoals7LoopEnd
+	addi $t0, $t0, -1
+	
+	lb $t1, carSizes($t0)
+	addi $t1, $t1, 1
+	sb $t1, carSizes($t0)
+	
+	j handleNumGoals7Loop
+handleNumGoals7LoopEnd:
+	j endHandleNumGoals
+endHandleNumGoals:
 	
 collisionFoundGoalNonEmpty:
-	
 	j endCheckCollisionGoals
 noCollisionFound:
 	j startCheckCollisionGoalsLoop
@@ -590,6 +704,7 @@ moveFrog:
 	lh $t1, ($t0)  # $t1 holds the x coordinate of the frog
 	lh $t2, 2($t0)  # $t2 holds the y coordinate of the frog
 	lb $t9, pixelsInDisplay
+	lb $t8, pixelsInDisplayDown
 	
 	beq $t3, 0x70, pauseGame
 	beq $t3, 0x61, handleLeft
@@ -678,7 +793,7 @@ handleDown:
 	addi $t6, $zero, 4
 	mult $t2, $t6
 	mflo $t7
-	blt $t7, $t9, handleDownEnd
+	blt $t7, $t8, handleDownEnd
 	addi $t2, $t2, -1
 handleDownEnd:
 	sh $t2, 2($t0)
@@ -898,10 +1013,15 @@ drawTimer:
 	lh $t3, sizeDisplay  # $t3 holds the number of pixels to jump downwards
 	
 	move $t4, $t0  # $t4 holds the address of the beginning of the row to draw
-	li $t6, 4  # $t6 holds the number of rows to draw
+	lh $t5, sizeDisplay
+	li $t6, 9
+	mult $t5, $t6
+	mflo $t5
+	add $t4, $t4, $t5
+	li $t6, 2  # $t6 holds the number of rows to draw
 drawTimerOuterLoop:
 	beqz $t6, drawTimerOuterLoopEnd
-	li $t5, 0  # $t5 holds the current offset of the row to draw on
+	li $t5, 4  # $t5 holds the current offset of the row to draw on
 drawTimerInnerLoop:
 	beq $t5, $t1, drawTimerInnerLoopEnd
 	
@@ -1177,7 +1297,7 @@ startDrawLives:
 	la $t0, displayBuffer  # $t0 holds the displayBuffer
 	lb $t1, lives  # $t1 holds the number of hearts to draw
 	
-	add $t2, $zero, $zero  # $t2 is the current offset
+	li $t2, 260 # $t2 is the current offset
 	addi $t3, $zero, 16  # $t3 holds the offset to add in number of bytes per life
 	
 	lh $t4, sizeDisplay  # $t4 holds the display size in bytes
@@ -1207,6 +1327,423 @@ drawLivesLoop:
 	j drawLivesLoop
 endDrawLives:
 
+startDrawScore:
+	lw $t5, score  # $t5 holds the current score
+	li $t6, 3  # $t6 is the number of numbers left to draw
+	
+	li $t1, 236  # $t1 holds the top left of the place to draw
+startDrawScoreLoop:
+	beqz $t6, endDrawScoreLoop
+	addi $t6, $t6, -1
+
+	li $t7, 10  # $t7 holds the value 10 for use in finding the digit
+	beq $t6, 2, findFirstDigit
+	beq $t6, 1, findSecondDigit
+	beq $t6, 0, findThirdDigit
+findFirstDigit:
+	div $t5, $t7
+	mfhi $t0
+	j endFindDigit
+findSecondDigit:
+	div $t8, $t5, $t7
+	div $t8, $t7
+	mfhi $t0
+	j endFindDigit
+findThirdDigit:
+	div $t0, $t5, 100
+endFindDigit:
+	lw $t2, goalColor  # $t2 holds the color to draw
+	lh $t9, sizeDisplay  # $t9 holds the size of the display in bytes
+	beq $t0, 0, drawZero
+	beq $t0, 1, drawOne
+	beq $t0, 2, drawTwo
+	beq $t0, 3, drawThree
+	beq $t0, 4, drawFour
+	beq $t0, 5, drawFive
+	beq $t0, 6, drawSix
+	beq $t0, 7, drawSeven
+	beq $t0, 8, drawEight
+	beq $t0, 9, drawNine
+drawZero:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	add $t4, $t9, $t4
+	
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawOne:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	addi $t3, $t3, 8
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 8
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 8
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawTwo:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 8
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawThree:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawFour:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawFive:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawSix:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawSeven:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawEight:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+drawNine:
+	move $t3, $t1  # $t3 holds the current location to draw
+	move $t4, $t1  # $t4 holds the location of the beginning of the row
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	addi $t3, $t3, 12
+	sw $t2, displayBuffer($t3)
+	
+	add $t4, $t9, $t4
+	move $t3, $t4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	addi $t3, $t3, 4
+	sw $t2, displayBuffer($t3)
+	j endDrawNumber
+endDrawNumber:
+	addi $t1, $t1, -20
+	j startDrawScoreLoop
+endDrawScoreLoop:
+endDrawScore:
+
 # Use the screen buffer to update the screen
 # Keep this code at the end
 startUpdateScreen:
@@ -1214,14 +1751,13 @@ startUpdateScreen:
 	lw $t1, displayAddress  # $t1 holds the location of the display
 	
 	addi $t2, $zero, 4  # $t2 holds the number 4, to multiply with below
-	lh $t9, displayBufferSize
+	lw $t9, displayBufferSize
 	mult $t9, $t2
 	mflo $t2  # $t2 holds the offset of the earliest undrawn pixel
 updateScreenLoop:
 	addi $t2, $t2, -4
-	add $t3, $t2, $t0  # $t3 holds the address of the location in the buffer being drawn
-	lw $t4, ($t3)  # $t4 holds the color to draw
-	add $t3, $t2, $t1   # $t3 holds the location in memory to draw in
+	lw $t4, displayBuffer($t2)  # $t4 holds the color to draw
+	add $t3, $t2, $t1  # $t3 holds the location in memory to draw in
 	sw $t4, ($t3)  # Draw onto the screen
 	
 	beqz $t2, endUpdateScreenLoop
