@@ -22,11 +22,19 @@
 # 4. Randomize the size of the logs and cars in the scene.
 # 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
 # 6. Add a time limit to the game.
-# 7. Add a third row in each of the water and road sections.
-# 8. 
+# 7. Add sound effects for movement, losing lives, collisions, and reaching the goal.
+# 8. Add a third row in each of the water and road sections.
+# 9. 
 #
 # Any additional information that the TA needs to know:
-# - (write here, if any)
+#  When the number of goals is
+#	1: The number of cars doubles
+#     	2: The speed of all cars is set to 2
+#	3: The size of all cars increases by 1
+#	4: The timer is reset, but now moves faster
+# 	5: The number of logs cut in half
+#	6: The speed of all logs is set to -1
+#	7: The size of all logs decreases by 1
 #
 ###################################################################
 
@@ -38,9 +46,6 @@
 
 # The y-coordinate is relative to the number of frogs
 # The x-coordinate is relative to the number of pixels
-
-# TODO: Build infrastructure for goals i.e. add necessary variables, draw goals
-# TODO: Add collision with goals, as well as a score that is updated
 
 .data
 	displayAddress:		.word 0x10008000
@@ -63,10 +68,12 @@
 	logSpeeds:		.byte -1, -1, -2, -2  # Speeds can be positive or negative
 	logWait:		.word 5  # The number of iterations to wait until movement
 	currentLogWait:		.word 0
-	numCarsTotal:		.byte 4
+	numCarsTotal:		.byte 2
 	numLogsTotal:		.byte 4
-	numCarsPerRow:		.byte 2
+	numCarsPerRow:		.byte 1
 	numLogsPerRow:		.byte 2
+	
+	numGoals:		.byte 0  # Used to decide difficulty
 	
 	goals:			.byte 0, 0, 0, 0, 0, 0, 0, 0
 	numGoals:		.byte 8
@@ -95,7 +102,7 @@
 	
 	# Everything here is in number of sizeFrogs
 	sizeScore:		.byte 1
-	sizeGoal:		.byte 1  # Keep this as 1, or goals won't draw properly
+	sizeGoal:		.byte 1  # Keep this as 1, or goals won't draw properly, everything else can change
 	sizeWater:		.byte 2
 	sizeSafe:		.byte 1
 	sizeRoad:		.byte 2
@@ -103,8 +110,19 @@
 	
 	screen:			.byte 0  # Screen = 0 is the game, screen = 1 is the pause menu
 	time:			.word 32
-	timerSpeed:		.word 10
+	timerSpeed:		.word 50
 	timeSoFar:		.word 0
+	
+	froggerTheme:		.half 66, 66, 62, 62, 66, 66, 62, 62, 67, 67, 66, 66, 64, 0, 67, 67, 66, 66, 64, 64, 71, 71, 69, 67, 66, 64, 62
+	froggerThemeLength:	.byte 27
+	gameOverTheme:		.half 66, 61, 58, 63, 65, 63, 62, 64, 62, 61, 59, 61
+	gameOverThemeLength:	.byte 12
+	goalTheme:		.half 62, 64, 66, 67, 69, 66, 62, 64, 66, 64, 62, 62, 64, 66, 67, 69, 66, 69, 67, 66, 64, 62
+	goalThemeLength:	.byte 22
+	collisionTheme:		.half 67, 66, 65, 64
+	collisionThemeLength:	.byte 4
+	
+	finishSetup:		.byte 1
 .text
 startSetup:
 	lb $t0, randomizeSizes
@@ -143,9 +161,34 @@ setupRandomLogLengthsLoop:
 	beqz $t1, endSetupLogLengths
 	j setupRandomLogLengthsLoop
 endSetupLogLengths:
+	li $t0, 0
+	sb $t0, finishSetup
 endSetup:
 	j main
 
+
+# Plays a line of midi at the address in $a0, where each note has length $a1, using instrument $a2, of length $a3
+playMidiFunction:
+	move $s0, $a3
+	li $s1, 2
+	mult $s0, $s1
+	mflo $s0
+	li $s1, 0
+	
+	move $s2, $a0
+startMidiLoop:
+	beq $s0, $s1, endMidiLoop
+	add $s3, $s2, $s1
+	lh $a0, ($s3)
+	li $a3, 127
+	li $v0, 33
+	syscall
+	
+	addi $s1, $s1, 2
+	j startMidiLoop
+endMidiLoop:
+	jr $ra
+endPlayMidiFunction:
 # Draws a rectangle at coordinates (x, y) = ($a0, $a1) of width $a2 in frog sizes and height 1 frog size
 # with the color in $a3
 drawRectangleFunction:
@@ -228,13 +271,33 @@ loseLifeFunction:
 	la $s1, lives
 	sb $s0, ($s1)
 	
+	sw $ra, ($sp)
+	addi $sp, $sp, -4
+	
+	la $a0, collisionTheme
+	li $a1, 500
+	li $a2, 1
+	lb $a3, collisionThemeLength
+	jal playMidiFunction
+	
+	addi $sp, $sp, 4
+	lw $ra, ($sp)
+	
 	jr $ra
 endLoseLifeFunction:
 
 dieFunction:
-	# Handle dying: Reset lives and goals filled
-	j Exit
-	# TODO
+	# Handle dying
+	la $a0, gameOverTheme
+	li $a1, 500
+	li $a2, 1
+	lb $a3, gameOverThemeLength
+	jal playMidiFunction
+
+	li $s0, 2
+	sb $s0, screen
+
+	j main
 dieFunctionEnd:
 
 checkCollisionFunction:
@@ -295,6 +358,13 @@ returnFalseCheckCollision:
 endCheckCollisionFunction:
 
 main:
+debugInfoStart:
+	# Display score
+	
+	#lw $a0, score
+	#li $v0, 1
+	#syscall
+debugInfoEnd:
 startPauseMenu:
 	lb $t0, screen  # $t0 is 1 if the game is paused
 	bne $t0, 1, endPauseMenu
@@ -333,6 +403,7 @@ endPauseGame:
 	sb $t1, ($t0)
 	j endPauseMenu
 endPauseMenu:
+
 startCheckCollisionGoals:
 	lb $t0, numGoals  # $t0 holds the number of goals to draw left
 	la $t1, goals  # $t1 holds the address of the goals
@@ -371,6 +442,14 @@ collisionFoundGoalEmpty:
 	lw $t2, score
 	addi $t2, $t2, 100
 	sw $t2, score
+	
+	la $a0, goalTheme
+	li $a1, 300
+	li $a2, 1
+	lb $a3, goalThemeLength
+	jal playMidiFunction
+endFroggerNoise:
+	
 collisionFoundGoalNonEmpty:
 	
 	j endCheckCollisionGoals
@@ -526,6 +605,13 @@ pauseGame:
 handleLeft:
 	addi $t5, $zero, 3
 	sb $t5, ($t4)  # Load the direction
+	
+	li $a0, 55
+	li $a1, 200
+	li $a2, 98
+	li $a3, 127
+	li $v0, 31
+	syscall
 
 	addi $t1, $t1, -4
 	bgez $t1, handleLeftEnd
@@ -536,6 +622,18 @@ handleLeftEnd:
 handleUp:
 	addi $t5, $zero, 0
 	sb $t5, ($t4)  # Load the direction
+	
+	# Play sound effect
+	li $a0, 70
+	li $a1, 200
+	li $a2, 98
+	li $a3, 127
+	li $v0, 31
+	syscall
+	
+	lw $t5, score
+	addi $t5, $t5, 1
+	sw $t5, score
 	
 	addi $t3, $zero, 1
 	
@@ -550,6 +648,13 @@ handleRight:
 	addi $t5, $zero, 1
 	sb $t5, ($t4)  # Load the direction
 	
+	li $a0, 65
+	li $a1, 200
+	li $a2, 98
+	li $a3, 127
+	li $v0, 31
+	syscall
+	
 	addi $t1, $t1, 4
 	addi $t9, $t9, -3
 	blt $t1, $t9, handleRightEnd
@@ -561,6 +666,13 @@ handleRightEnd:
 handleDown:
 	addi $t5, $zero, 2
 	sb $t5, ($t4)  # Load the direction
+	
+	li $a0, 50
+	li $a1, 200
+	li $a2, 98
+	li $a3, 127
+	li $v0, 31
+	syscall
 
 	addi $t2, $t2, 1
 	addi $t6, $zero, 4
@@ -821,7 +933,7 @@ handleTimer:
 	sw $t1, ($t0)
 	
 	bnez $t1, handleTimerEnd
-	j Exit
+	j dieFunction
 handleTimerEnd:
 
 drawGoals:
@@ -1115,7 +1227,19 @@ updateScreenLoop:
 	beqz $t2, endUpdateScreenLoop
 	j updateScreenLoop
 endUpdateScreenLoop:
-
+	
+	lb $t0, finishSetup
+	beqz $t0, endUpdateScreen
+endOfSetupPhase:
+	li $t0, 0
+	sb $t0, finishSetup
+playTheme:
+	la $a0, froggerTheme
+	li $a1, 300
+	li $a2, 1
+	lb $a3, froggerThemeLength
+	jal playMidiFunction
+	
 endUpdateScreen:
 
 sleep:
