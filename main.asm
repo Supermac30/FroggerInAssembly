@@ -9,7 +9,7 @@
 # - Unit width in pixels: 8
 # - Unit height in pixels: 8
 # - Display width in pixels: 256
-# - Display height in pixels: 256
+# - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
@@ -44,6 +44,7 @@
 
 # TODO: Fix log movement so that the frog can move even if there is an overflow, just that the x coordinate is now zero
 # TODO: Have collisions decrease the score by 10
+# TODO: Have the pause screen say 'pause'
 
 # Frogger in MIPS
 #
