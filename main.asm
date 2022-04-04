@@ -21,17 +21,24 @@
 # 2. Have the cars and logs move at different speeds
 # 3. Display the number of lives remaining.
 # 4. Randomize the size of the logs and cars in the scene.
-# 5. Displaying a pause screen or image when the â€˜pâ€™ key is pressed, and returning to the game when â€˜pâ€™ is pressed again.
+# 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
 # 6. Add a time limit to the game.
 # 7. Add sound effects for movement, losing lives, collisions, and reaching the goal.
 # 8. Dynamic increase in difficulty (speed, obstacles, etc.) as game progresses
 # 9. Add a third row in each of the water and road sections. (I added four of each to fill up the screen)
 #
 # Hard:
-# 10. Display the playerâ€™s score at the top of the screen.
+# 10. Display the player’s score at the top of the screen.
 #
 # Any additional information that the TA needs to know:
-# - The increase in difficulty is as folloes: when the number of goals is
+# - To make the game easier for testing purposes, you can increase
+#   the following variables at the top of the data section:
+#	- Increase the logSpeed and carSpeed to a larger byte value.
+#	  This makes the cars and logs move slower
+#	- Increase the timerSpeed to a larger byte value.
+#	  This makes the timer move slower
+#
+# - The increase in difficulty is as follows: when the number of goals is
 #	1: The number of cars doubles
 #     	2: The speed of all cars increase
 #	3: The speed of all logs increase
@@ -41,10 +48,6 @@
 #	7: The size of all cars increases by 1
 #
 ###################################################################
-
-# TODO: Fix log movement so that the frog can move even if there is an overflow, just that the x coordinate is now zero
-# TODO: Have collisions decrease the score by 10
-# TODO: Have the pause screen say 'pause'
 
 # Frogger in MIPS
 #
@@ -56,6 +59,12 @@
 # The x-coordinate is relative to the number of pixels
 
 .data
+	# Change these to make the game easier:
+	carWait:		.word 10  # The number of iterations to wait until movement
+	logWait:		.word 10  # The number of iterations to wait until movement
+	timerSpeed:		.word 50
+	
+	
 	displayAddress:		.word 0x10008000
 	
 	lives:			.byte 3
@@ -69,12 +78,12 @@
 	carLocations:		.byte 28, 12, 0, 16, 28, 12, 0, 16
 	carSizes:		.byte 2, 2, 2, 2, 2, 2, 2, 2
 	carSpeeds:		.byte 1, 1, 2, 2, 1, 1, 2, 2  # Speeds must be positive
-	carWait:		.word 10  # The number of iterations to wait until movement
+
 	currentCarWait:		.word 0
 	logLocations:		.byte 8, 24, 4, 20, 8, 24, 4, 20
 	logSizes:		.byte 2, 2, 2, 2, 2, 2, 2, 2
 	logSpeeds:		.byte -1, -1, -2, -2, -1, -1, -2, -2 # Speeds can be positive or negative
-	logWait:		.word 10  # The number of iterations to wait until movement
+
 	currentLogWait:		.word 0
 	numCarsTotal:		.byte 4
 	numLogsTotal:		.byte 8
@@ -119,7 +128,6 @@
 	
 	screen:			.byte 0  # Screen = 0 is the game, screen = 1 is the pause menu
 	time:			.word 31
-	timerSpeed:		.word 50
 	timeSoFar:		.word 0
 	
 	froggerTheme:		.half 66, 66, 62, 62, 66, 66, 62, 62, 67, 67, 66, 66, 64, 0, 67, 67, 66, 66, 64, 64, 71, 71, 69, 67, 66, 64, 62
@@ -170,7 +178,7 @@ setupRandomLogLengthsLoop:
 	beqz $t1, endSetupLogLengths
 	j setupRandomLogLengthsLoop
 endSetupLogLengths:
-	li $t0, 0
+	li $t0, 1
 	sb $t0, finishSetup
 endSetup:
 	j main
