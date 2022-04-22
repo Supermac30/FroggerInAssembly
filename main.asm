@@ -1,9 +1,13 @@
 #####################################################################
 #
-# CSC258H5S Winter 2022 Assembly Final Project
-# University of Toronto, St. George
+# Frogger in MIPS: Try running this in the MARS MIPS simulator
 #
-# Student: Mark Bedawyi, 1007075479
+# Note that the size of the frog is written in number of pixels
+# The size of the display is in number of bytes across (this turned out to be more convenient than number of pixels)
+# The size of all other objects is relative to the size of the frog, i.e. a size of num is sizeFrog * num pixels
+#
+# The y-coordinate is relative to the number of frogs
+# The x-coordinate is relative to the number of pixels
 #
 # Bitmap Display Configuration:
 # - Unit width in pixels: 8
@@ -12,51 +16,8 @@
 # - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
-# Which milestone is reached in this submission?
-# - Milestone 5
-#
-# Which approved additional features have been implemented?
-# Easy:
-# 1. Change the direction the frog is pointing
-# 2. Have the cars and logs move at different speeds
-# 3. Display the number of lives remaining.
-# 4. Randomize the size of the logs and cars in the scene.
-# 5. Displaying a pause screen or image when the ‘p’ key is pressed, and returning to the game when ‘p’ is pressed again.
-# 6. Add a time limit to the game.
-# 7. Add sound effects for movement, losing lives, collisions, and reaching the goal.
-# 8. Dynamic increase in difficulty (speed, obstacles, etc.) as game progresses
-# 9. Add a third row in each of the water and road sections. (I added four of each to fill up the screen)
-#
-# Hard:
-# 10. Display the player’s score at the top of the screen.
-#
-# Any additional information that the TA needs to know:
-# - To make the game easier for testing purposes, you can increase
-#   the following variables at the top of the data section:
-#	- Increase the logSpeed and carSpeed to a larger byte value.
-#	  This makes the cars and logs move slower
-#	- Increase the timerSpeed to a larger byte value.
-#	  This makes the timer move slower
-#
-# - The increase in difficulty is as follows: when the number of goals is
-#	1: The number of cars doubles
-#     	2: The speed of all cars increase
-#	3: The speed of all logs increase
-#	4: The timer is reset, but now moves faster
-# 	5: The number of logs cut in half
-#	6: The size of all logs decreases by 1
-#	7: The size of all cars increases by 1
-#
+# 
 ###################################################################
-
-# Frogger in MIPS
-#
-# Note that the size of the frog is written in number of pixels
-# The size of the display is in number of bytes across (this turned out to be more convenient than number of pixels)
-# The size of all other objects is relative to the size of the frog, i.e. a size of num is sizeFrog * num pixels
-
-# The y-coordinate is relative to the number of frogs
-# The x-coordinate is relative to the number of pixels
 
 .data
 	# Change these to make the game easier:
